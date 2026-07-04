@@ -8,16 +8,32 @@ tracks them across frames, and counts:
   2. Number of people inside one or more defined "queue" zones
   3. (Optional) approximate wait time per person based on dwell time in a zone
 
+On top of the video overlay, it also writes a plain-text / Markdown REPORT
+describing what it sees, e.g.:
+
+    ## People Report - 2026-07-05 14:32:10
+    - Total people detected: 12
+    - People in queue_zone_1: 5 (waiting)
+    - People not in a queue: 7
+
+The report is:
+  - printed to the console every `--report-interval` seconds
+  - written to `report_live.md` (overwritten each interval - "current status")
+  - appended to `report_log.md` (full history, one entry per interval)
+  - a final `report_summary.md` is written when the video ends (min/max/avg)
+
 Requirements:
     pip install ultralytics opencv-python numpy
 
 Usage:
-    python people_queue_counter.py --source 0                 # webcam
-    python people_queue_counter.py --source video.mp4         # video file
-    python people_queue_counter.py --source rtsp://<url>      # IP camera
-    python people_queue_counter.py --source 0 --define-zone   # interactively draw a queue zone first
+    python people_queue_counter.py --source 0                       # webcam
+    python people_queue_counter.py --source video.mp4               # video file
+    python people_queue_counter.py --source rtsp://<url>            # IP camera
+    python people_queue_counter.py --source 0 --define-zone         # draw a queue zone first
+    python people_queue_counter.py --source 0 --no-show             # headless, report-only (no window)
+    python people_queue_counter.py --source 0 --report-interval 5   # write a report every 5s
 
-Press 'q' to quit while the video window is focused.
+Press 'q' to quit while the video window is focused (not needed with --no-show).
 """
 
 import argparse
@@ -25,6 +41,7 @@ import time
 import json
 import os
 from collections import defaultdict
+from datetime import datetime
 
 import cv2
 import numpy as np
@@ -32,6 +49,9 @@ from ultralytics import YOLO
 
 PERSON_CLASS_ID = 0  # COCO class id for "person"
 ZONES_FILE = "zones.json"
+LIVE_REPORT_FILE = "report_live.md"
+LOG_REPORT_FILE = "report_log.md"
+SUMMARY_REPORT_FILE = "report_summary.md"
 
 
 # --------------------------------------------------------------------------
@@ -94,9 +114,82 @@ def point_in_zone(point, polygon):
 
 
 # --------------------------------------------------------------------------
+# Reporting
+# --------------------------------------------------------------------------
+def build_report_markdown(total_people, zone_counts, zone_avg_wait=None):
+    """Build a Markdown snapshot report describing current people/queue counts."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    total_in_zones = sum(zone_counts.values())
+    not_in_queue = max(total_people - total_in_zones, 0)
+
+    lines = [f"## People Report - {timestamp}", ""]
+    lines.append(f"- **Total people detected:** {total_people}")
+
+    if zone_counts:
+        for zone_name, count in zone_counts.items():
+            wait_txt = ""
+            if zone_avg_wait and zone_avg_wait.get(zone_name):
+                wait_txt = f" (avg wait ~{zone_avg_wait[zone_name]:.0f}s)"
+            lines.append(f"- **People in {zone_name} (queue):** {count}{wait_txt}")
+        lines.append(f"- **People not in a queue:** {not_in_queue}")
+    else:
+        lines.append("- No queue zones defined (run with `--define-zone` to add one).")
+
+    if total_people == 0:
+        lines.append("- Status: no people currently detected in the frame.")
+    elif total_in_zones == 0 and zone_counts:
+        lines.append("- Status: people present, but nobody is currently in a queue.")
+
+    return "\n".join(lines) + "\n"
+
+
+def write_reports(markdown_snapshot, first_write):
+    # "Current status" file: always overwritten, always reflects the latest snapshot
+    with open(LIVE_REPORT_FILE, "w") as f:
+        f.write(markdown_snapshot)
+
+    # Full history log: appended to, one snapshot per interval
+    mode = "w" if first_write else "a"
+    with open(LOG_REPORT_FILE, mode) as f:
+        if first_write:
+            f.write("# People & Queue Counting - Session Log\n\n")
+        f.write(markdown_snapshot + "\n")
+
+
+def write_summary_report(history):
+    """Write an end-of-session summary: min/max/avg totals and per-zone stats."""
+    if not history:
+        return
+
+    totals = [h["total"] for h in history]
+    all_zone_names = sorted({name for h in history for name in h["zones"]})
+
+    lines = ["# People & Queue Counting - Session Summary", ""]
+    lines.append(f"- Session duration: {len(history)} report intervals")
+    lines.append(f"- Total people detected: min {min(totals)}, max {max(totals)}, avg {sum(totals)/len(totals):.1f}")
+    lines.append("")
+
+    if all_zone_names:
+        lines.append("## Queue zones")
+        for zone_name in all_zone_names:
+            zone_vals = [h["zones"].get(zone_name, 0) for h in history]
+            lines.append(
+                f"- **{zone_name}**: min {min(zone_vals)}, max {max(zone_vals)}, "
+                f"avg {sum(zone_vals)/len(zone_vals):.1f} people waiting"
+            )
+    else:
+        lines.append("No queue zones were defined during this session.")
+
+    with open(SUMMARY_REPORT_FILE, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+    print(f"\nSession summary written to {SUMMARY_REPORT_FILE}")
+
+
+# --------------------------------------------------------------------------
 # Main loop
 # --------------------------------------------------------------------------
-def run(source, model_path="yolov8n.pt", conf=0.4, show=True):
+def run(source, model_path="yolov8n.pt", conf=0.4, show=True, report_interval=5):
     zones = load_zones()
     model = YOLO(model_path)
 
@@ -106,6 +199,9 @@ def run(source, model_path="yolov8n.pt", conf=0.4, show=True):
 
     # track_id -> first_seen_timestamp, for dwell-time estimation per zone
     zone_entry_time = defaultdict(dict)  # {zone_name: {track_id: entry_ts}}
+    last_report_time = 0.0
+    first_write = True
+    report_history = []  # list of {"total": int, "zones": {name: count}}
 
     while True:
         ok, frame = cap.read()
@@ -161,6 +257,22 @@ def run(source, model_path="yolov8n.pt", conf=0.4, show=True):
         cv2.putText(frame, f"Total people in frame: {total_people}", (15, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
+        # --- Periodic Markdown/text report ---
+        if now - last_report_time >= report_interval:
+            zone_avg_wait = {}
+            for zone_name, entry_map in zone_entry_time.items():
+                if entry_map:
+                    waits = [now - t for t in entry_map.values()]
+                    zone_avg_wait[zone_name] = sum(waits) / len(waits)
+
+            snapshot_md = build_report_markdown(total_people, zone_counts, zone_avg_wait)
+            write_reports(snapshot_md, first_write)
+            first_write = False
+            report_history.append({"total": total_people, "zones": dict(zone_counts)})
+
+            print(snapshot_md)
+            last_report_time = now
+
         if show:
             cv2.imshow("People & Queue Counter", frame)
             if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -168,6 +280,7 @@ def run(source, model_path="yolov8n.pt", conf=0.4, show=True):
 
     cap.release()
     cv2.destroyAllWindows()
+    write_summary_report(report_history)
 
 
 if __name__ == "__main__":
@@ -176,9 +289,13 @@ if __name__ == "__main__":
     parser.add_argument("--model", default="yolov8n.pt", help="YOLO model weights (n/s/m/l/x)")
     parser.add_argument("--conf", type=float, default=0.4, help="Detection confidence threshold")
     parser.add_argument("--define-zone", action="store_true", help="Draw a queue zone before running")
+    parser.add_argument("--no-show", action="store_true", help="Run headless (no video window), report-only")
+    parser.add_argument("--report-interval", type=float, default=5.0,
+                         help="Seconds between written/printed reports (default: 5)")
     args = parser.parse_args()
 
     if args.define_zone:
         define_zone_interactively(args.source)
 
-    run(args.source, model_path=args.model, conf=args.conf)
+    run(args.source, model_path=args.model, conf=args.conf,
+        show=not args.no_show, report_interval=args.report_interval)
