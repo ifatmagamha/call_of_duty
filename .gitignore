@@ -1,11 +1,8 @@
-# Virtual environment
-.venv/
-
-# Environment variables
+.DS_Store
+node_modules/
+dist/
 .env
-
-
-# Python cache
+.venv/
 __pycache__/
-*.py[cod]
-*$py.class
+.pytest_cache/
+*.pyc
