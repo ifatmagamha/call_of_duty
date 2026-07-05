@@ -17,6 +17,31 @@ def _load_clinic(tx, clinic_id: str) -> dict[str, Any] | None:
     return dict(record["c"]) if record else None
 
 
+def _load_ongoing_transfer(tx, clinic_id: str) -> dict[str, Any] | None:
+    record = tx.run(
+        """
+        MATCH (source:Warehouse)-[:TRANSFER_SOURCE]->(transfer:Transfer {status: 'ongoing'})
+              -[:TRANSFER_TARGET]->(:Clinic {id: $clinic_id})
+        RETURN source, transfer
+        ORDER BY transfer.created_at DESC
+        LIMIT 1
+        """,
+        clinic_id=clinic_id,
+    ).single()
+    if record is None:
+        return None
+
+    source = dict(record["source"])
+    transfer = dict(record["transfer"])
+    return {
+        "source_name": source["name"],
+        "quantity": transfer["quantity"],
+        "delivery_time_minutes": transfer["delivery_time_minutes"],
+        "road_status": transfer["road_status"],
+        "created_at": transfer["created_at"],
+    }
+
+
 def get_resupply_options(
     client: Neo4jClient, clinic_id: str
 ) -> list[ResupplyOption]:
@@ -100,10 +125,10 @@ def get_resupply_options(
 def get_agent_recommendation(
     client: Neo4jClient, clinic_id: str
 ) -> AgentRecommendation:
-    def load_target(tx):
-        return _load_clinic(tx, clinic_id)
+    def load_context(tx):
+        return _load_clinic(tx, clinic_id), _load_ongoing_transfer(tx, clinic_id)
 
-    clinic = client.read(load_target)
+    clinic, ongoing_transfer = client.read(load_context)
     if clinic is None:
         raise ValueError("Clinic not found")
 
@@ -132,7 +157,23 @@ def get_agent_recommendation(
     ]
     if clinic["test_kits_available"] < clinic["threshold_min_kits"]:
         reasoning.append("Current stock is below the clinic's minimum threshold.")
-    if needs_resupply and best:
+    if ongoing_transfer:
+        reasoning.append(
+            "A transfer is already ongoing: "
+            f"{ongoing_transfer['quantity']} kits from {ongoing_transfer['source_name']} "
+            f"via a {ongoing_transfer['road_status']} route, estimated delivery "
+            f"{ongoing_transfer['delivery_time_minutes']} minutes."
+        )
+        reasoning.append(
+            "The clinic's stock remains unchanged until the transfer is completed, "
+            "so the current risk indicators still show the latest observed clinic state."
+        )
+        recommendation = (
+            f"Transfer ongoing for {clinic['name']}: "
+            f"{ongoing_transfer['quantity']} kits from {ongoing_transfer['source_name']} "
+            f"are reserved and en route."
+        )
+    elif needs_resupply and best:
         reasoning.append(
             f"{best.source_name} is the best warehouse option from Neo4j supply routes: {best.reason}"
         )
@@ -172,6 +213,7 @@ def get_agent_recommendation(
             "neo4j:Clinic",
             "neo4j:Warehouse",
             "neo4j:CAN_SUPPLY",
+            "neo4j:Transfer",
             "backend:risk_engine",
             "backend:recommendation_engine:warehouse_only",
         ],

@@ -467,7 +467,7 @@ select {
 
 .site-modal {
   display: flex;
-  width: min(640px, 100%);
+  width: min(1040px, 100%);
   max-height: calc(100vh - 64px);
   flex-direction: column;
   overflow: hidden;
@@ -519,6 +519,87 @@ select {
 
 .site-modal-body .panel-muted {
   border-bottom: 0;
+}
+
+.clinic-site-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.clinic-site-left,
+.clinic-site-right {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.clinic-queue-figure {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid #d8d2c4;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.clinic-queue-figure img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+.clinic-indicator-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.clinic-indicator-header h3,
+.site-situation-card h3 {
+  margin: 0;
+  color: #18211d;
+  font-size: 18px;
+  font-weight: 780;
+  line-height: 1.22;
+}
+
+.site-situation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid #ded6c6;
+  border-radius: 8px;
+  padding: 13px;
+  background: #ffffff;
+}
+
+.site-situation-card > p {
+  margin: 0;
+  color: #5f584c;
+  font-size: 13px;
+  line-height: 1.42;
+}
+
+.ongoing-transfer-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #b9d7ca;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f0fbf5;
+}
+
+.ongoing-transfer-banner p {
+  margin: 0;
+  color: #1f574b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.36;
 }
 
 .map-legend {
@@ -682,5 +763,9 @@ select {
 
   .site-modal-body {
     padding: 18px 14px;
+  }
+
+  .clinic-site-layout {
+    grid-template-columns: 1fr;
   }
 }
