@@ -4,6 +4,9 @@ import { api } from "./api/client";
 import { AgentReasoningPanel } from "./components/AgentReasoningPanel";
 import { MapView } from "./components/MapView";
 import { NodeDetailsPanel } from "./components/NodeDetailsPanel";
+import { MediaIngestionPanel } from "./components/MediaIngestionPanel";
+import { ObservationReviewPanel } from "./components/ObservationReviewPanel";
+import { SituationBriefingPanel } from "./components/SituationBriefingPanel";
 import type {
   AgentRecommendation,
   Clinic,
@@ -33,6 +36,7 @@ export default function App() {
   );
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [observationRefreshKey, setObservationRefreshKey] = useState(0);
 
   const selectedClinicFromList = useMemo(
     () =>
@@ -114,6 +118,17 @@ export default function App() {
     await api.resetDemoData();
     await loadCollections();
     setSelected({ type: "clinic", id: "clinic-b" });
+  }
+
+  async function handleObservationApplied() {
+    await loadCollections();
+    setObservationRefreshKey((value) => value + 1);
+    if (selected?.type === "clinic") {
+      const [clinic, agent] = await Promise.all([
+        api.getClinic(selected.id), api.getAgentRecommendation(selected.id),
+      ]);
+      setSelectedClinic(clinic); setRecommendation(agent);
+    }
   }
 
   async function handleClinicUpdate(update: ClinicUpdate) {
@@ -208,6 +223,9 @@ export default function App() {
       </section>
 
       <aside className="side-panel">
+        <MediaIngestionPanel clinics={clinics} onApplied={handleObservationApplied} />
+        <ObservationReviewPanel refreshKey={observationRefreshKey} onApplied={handleObservationApplied} />
+        <SituationBriefingPanel />
         <NodeDetailsPanel
           clinic={selectedClinic ?? selectedClinicFromList}
           warehouse={selectedWarehouse}

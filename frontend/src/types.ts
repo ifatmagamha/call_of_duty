@@ -105,3 +105,58 @@ export type ClinicUpdate = {
   nurses_available?: number;
   threshold_min_kits?: number;
 };
+
+export type ObservationSourceType = "image" | "audio" | "manual";
+export type ObservationStatus = "pending_review" | "applied" | "rejected" | "failed";
+
+type ObservationCommon = {
+  clinic_id: string;
+  source_type: ObservationSourceType;
+  confidence: number;
+  observed_at: string;
+  raw_text?: string | null;
+  transcript?: string | null;
+  evidence_summary: string;
+  model_id: string;
+  request_id?: string | null;
+};
+
+export type ObservationEvent =
+  | (ObservationCommon & { event_type: "QUEUE_COUNT_UPDATED"; people_waiting: number })
+  | (ObservationCommon & { event_type: "TEST_KITS_UPDATED"; test_kits_available: number })
+  | (ObservationCommon & { event_type: "NURSES_AVAILABLE_UPDATED"; nurses_available: number })
+  | (ObservationCommon & { event_type: "CLINIC_STATUS_REPORTED"; status_note: string });
+
+export type Observation = {
+  id: string;
+  event: ObservationEvent;
+  status: ObservationStatus;
+  previous_value: number | string | null;
+  new_value: number | string | null;
+  created_at: string;
+  reviewed_at: string | null;
+  error_detail: string | null;
+  model_id: string;
+  request_id: string | null;
+  token_usage: Record<string, number> | null;
+};
+
+export type ImageIngestionResponse = {
+  observation: Observation;
+  clinic: Clinic | null;
+  recommendation: AgentRecommendation | null;
+};
+
+export type AudioIngestionResponse = ImageIngestionResponse & { transcript: string };
+
+export type SituationBriefing = {
+  global_status: "stable" | "watch" | "degrading" | "critical";
+  headline: string;
+  summary: string;
+  detected_trends: string[];
+  center_messages: { clinic_id: string; message: string }[];
+  recommended_operator_checks: string[];
+  generated_at: string;
+  model_id: string;
+  source_observation_ids: string[];
+};

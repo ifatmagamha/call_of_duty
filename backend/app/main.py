@@ -1,9 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings
-from app.neo4j_client import neo4j_client
-from app.routes import admin, clinics, graph, transfers, warehouses
+from app.core.config import get_settings
+from app.infrastructure.neo4j.client import neo4j_client
+from app.api.routers import (
+    admin,
+    briefings,
+    clinics,
+    graph,
+    ingestion,
+    observations,
+    transfers,
+    warehouses,
+)
 
 settings = get_settings()
 
@@ -25,6 +34,9 @@ app.include_router(clinics.router)
 app.include_router(graph.router)
 app.include_router(transfers.router)
 app.include_router(warehouses.router)
+app.include_router(ingestion.router)
+app.include_router(observations.router)
+app.include_router(briefings.router)
 
 
 @app.get("/health")

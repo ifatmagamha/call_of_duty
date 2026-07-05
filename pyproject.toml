@@ -1,7 +1,23 @@
 [project]
-name = "call-of-duty"
+name = "ebola-resupply-platform"
 version = "0.1.0"
-description = "Add your description here"
+description = "Graph-backed Ebola test-kit resupply and multimodal observation platform"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi==0.115.6",
+    "neo4j==5.27.0",
+    "openai==1.59.7",
+    "pillow>=11.1,<12",
+    "pydantic==2.10.3",
+    "pydantic-settings>=2.7,<3",
+    "python-dotenv==1.0.1",
+    "python-multipart>=0.0.20,<1",
+    "uvicorn[standard]==0.32.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio>=0.25,<1",
+]

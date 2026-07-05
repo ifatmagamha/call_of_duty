@@ -1,0 +1,8 @@
+CREATE CONSTRAINT clinic_id IF NOT EXISTS
+FOR (c:Clinic) REQUIRE c.id IS UNIQUE;
+
+CREATE CONSTRAINT warehouse_id IF NOT EXISTS
+FOR (w:Warehouse) REQUIRE w.id IS UNIQUE;
+
+CREATE CONSTRAINT observation_id IF NOT EXISTS
+FOR (o:Observation) REQUIRE o.id IS UNIQUE;
