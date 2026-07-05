@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RotateCcw, X } from "lucide-react";
 import { api } from "./api/client";
-import { AgentReasoningPanel } from "./components/AgentReasoningPanel";
+import { ClinicSiteModal } from "./components/ClinicSiteModal";
 import { MapView } from "./components/MapView";
 import { NodeDetailsPanel } from "./components/NodeDetailsPanel";
 import { MediaIngestionPanel } from "./components/MediaIngestionPanel";
@@ -279,21 +279,25 @@ export default function App() {
               </button>
             </div>
             <div className="site-modal-body">
-              <NodeDetailsPanel
-                clinic={selectedClinic ?? selectedClinicFromList}
-                warehouse={selectedWarehouse}
-                loading={loadingNode}
-                onClinicUpdate={handleClinicUpdate}
-              />
-              {selected.type === "clinic" && (
-                <AgentReasoningPanel
+              {selected.type === "clinic" ? (
+                <ClinicSiteModal
+                  clinic={selectedClinic ?? selectedClinicFromList}
                   recommendation={recommendation}
                   transfers={transfers}
-                  loading={loadingAgent}
+                  loading={loadingNode}
+                  loadingAgent={loadingAgent}
                   validatingSourceId={validatingSourceId}
                   actionMessage={actionMessage}
+                  onClinicUpdate={handleClinicUpdate}
                   onValidateTransfer={handleValidateTransfer}
                   onRejectTransfer={handleRejectTransfer}
+                />
+              ) : (
+                <NodeDetailsPanel
+                  clinic={null}
+                  warehouse={selectedWarehouse}
+                  loading={loadingNode}
+                  onClinicUpdate={handleClinicUpdate}
                 />
               )}
             </div>
