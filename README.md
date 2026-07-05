@@ -198,8 +198,7 @@ Neo4j integration tests reset the configured graph and therefore require the exp
 The Neo4j check verifies connectivity, constraints, node counts, and the observation
 relationship query. The Crusoe check lists models and verifies all three configured
 IDs are accessible without printing the key. Model listing does not prove inference;
-use the opt-in `crusoe_live` suite for that. See
-`docs/context/crusoe-managed-inference.md` for the complete proof ladder.
+use the opt-in `crusoe_live` suite for that.
 
 Build the frontend with `npm.cmd run build` on PowerShell or `npm run build` elsewhere.
 

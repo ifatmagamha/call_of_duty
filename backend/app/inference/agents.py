@@ -72,4 +72,9 @@ class SituationAgent:
         invented = [trend for trend in briefing.detected_trends if trend not in allowed_trends]
         if invented:
             raise ValueError("Situation briefing contains a non-deterministic trend")
-        return briefing
+        return briefing.model_copy(
+            update={
+                "model_id": self.settings.crusoe_situation_model,
+                "source_observation_ids": snapshot["source_observation_ids"],
+            }
+        )

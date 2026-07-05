@@ -20,6 +20,21 @@ class FakeClient:
         )
 
 
+class UntrustedProvenanceClient:
+    async def generate_briefing(self, snapshot, prompt, valid_ids):
+        return SituationBriefing(
+            global_status="stable",
+            headline="Stable",
+            summary="No deterministic trend was supplied.",
+            detected_trends=[],
+            center_messages=[],
+            recommended_operator_checks=[],
+            generated_at="2026-07-05T10:00:00+00:00",
+            model_id="provider-invented-model",
+            source_observation_ids=["provider-invented-observation"],
+        )
+
+
 @pytest.mark.asyncio
 async def test_situation_agent_rejects_invented_trends():
     snapshot = {
@@ -28,3 +43,20 @@ async def test_situation_agent_rejects_invented_trends():
     }
     with pytest.raises(ValueError, match="non-deterministic trend"):
         await SituationAgent(FakeClient(), Settings(_env_file=None)).generate(snapshot)
+
+
+@pytest.mark.asyncio
+async def test_situation_agent_replaces_untrusted_provenance():
+    snapshot = {
+        "clinics": [{"id": "clinic-b"}],
+        "deterministic_trends": [],
+        "source_observation_ids": ["obs-trusted"],
+    }
+    settings = Settings(_env_file=None)
+
+    briefing = await SituationAgent(
+        UntrustedProvenanceClient(), settings
+    ).generate(snapshot)
+
+    assert briefing.model_id == settings.crusoe_situation_model
+    assert briefing.source_observation_ids == ["obs-trusted"]
