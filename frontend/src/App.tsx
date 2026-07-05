@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, X } from "lucide-react";
 import { api } from "./api/client";
 import { AgentReasoningPanel } from "./components/AgentReasoningPanel";
 import { MapView } from "./components/MapView";
@@ -23,6 +23,7 @@ export default function App() {
   const [supplyLinks, setSupplyLinks] = useState<SupplyLink[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [selected, setSelected] = useState<Selection | null>(null);
+  const [isSiteModalOpen, setIsSiteModalOpen] = useState(false);
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(
     null,
@@ -112,12 +113,33 @@ export default function App() {
     setLoadingAgent(false);
   }, [selected]);
 
+  useEffect(() => {
+    if (!isSiteModalOpen) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsSiteModalOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSiteModalOpen]);
+
+  function handleSelectSite(selection: Selection) {
+    setSelected(selection);
+    setIsSiteModalOpen(true);
+  }
+
   async function handleResetDemoData() {
     setError(null);
     setActionMessage(null);
     await api.resetDemoData();
     await loadCollections();
     setSelected({ type: "clinic", id: "clinic-b" });
+    setIsSiteModalOpen(true);
   }
 
   async function handleObservationApplied() {
@@ -204,8 +226,8 @@ export default function App() {
       <section className="map-panel">
         <div className="topbar">
           <div>
-            <p className="eyebrow">Kinshasa response map</p>
-            <h1>Ebola Test Kit Resupply</h1>
+            <p className="eyebrow">Kinshasa-Brazzaville response map</p>
+            <h1>Call of Duty</h1>
           </div>
           <button className="secondary-button" onClick={handleResetDemoData}>
             <RotateCcw size={16} />
@@ -218,7 +240,7 @@ export default function App() {
           warehouses={warehouses}
           supplyLinks={supplyLinks}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={handleSelectSite}
         />
       </section>
 
@@ -226,22 +248,58 @@ export default function App() {
         <MediaIngestionPanel clinics={clinics} onApplied={handleObservationApplied} />
         <ObservationReviewPanel refreshKey={observationRefreshKey} onApplied={handleObservationApplied} />
         <SituationBriefingPanel />
-        <NodeDetailsPanel
-          clinic={selectedClinic ?? selectedClinicFromList}
-          warehouse={selectedWarehouse}
-          loading={loadingNode}
-          onClinicUpdate={handleClinicUpdate}
-        />
-        <AgentReasoningPanel
-          recommendation={recommendation}
-          transfers={transfers}
-          loading={loadingAgent}
-          validatingSourceId={validatingSourceId}
-          actionMessage={actionMessage}
-          onValidateTransfer={handleValidateTransfer}
-          onRejectTransfer={handleRejectTransfer}
-        />
       </aside>
+
+      {isSiteModalOpen && selected && (
+        <div
+          aria-modal="true"
+          aria-labelledby="site-modal-title"
+          className="site-modal-overlay"
+          role="dialog"
+          onClick={() => setIsSiteModalOpen(false)}
+        >
+          <div
+            className="site-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="site-modal-header">
+              <div>
+                <p className="eyebrow">Map site</p>
+                <h2 className="panel-title" id="site-modal-title">
+                  {selected.type === "clinic" ? "Clinic details" : "Warehouse details"}
+                </h2>
+              </div>
+              <button
+                className="modal-close-button"
+                onClick={() => setIsSiteModalOpen(false)}
+                type="button"
+              >
+                <X size={18} />
+                Close
+              </button>
+            </div>
+            <div className="site-modal-body">
+              <NodeDetailsPanel
+                clinic={selectedClinic ?? selectedClinicFromList}
+                warehouse={selectedWarehouse}
+                loading={loadingNode}
+                onClinicUpdate={handleClinicUpdate}
+              />
+              {selected.type === "clinic" && (
+                <AgentReasoningPanel
+                  recommendation={recommendation}
+                  transfers={transfers}
+                  loading={loadingAgent}
+                  validatingSourceId={validatingSourceId}
+                  actionMessage={actionMessage}
+                  onValidateTransfer={handleValidateTransfer}
+                  onRejectTransfer={handleRejectTransfer}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

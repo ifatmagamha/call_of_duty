@@ -17,7 +17,7 @@ from app.api.routers import (
 settings = get_settings()
 
 app = FastAPI(
-    title="Ebola Test Kit Resupply Platform API",
+    title="Call of Duty API",
     version="0.1.0",
 )
 

@@ -16,6 +16,36 @@ import type {
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+function errorMessageFromBody(body: string, status: number) {
+  if (!body) {
+    return `Request failed with ${status}`;
+  }
+
+  try {
+    const payload = JSON.parse(body) as { detail?: unknown };
+    if (typeof payload.detail === "string") {
+      return payload.detail;
+    }
+    if (payload.detail) {
+      return JSON.stringify(payload.detail);
+    }
+  } catch {
+    return body;
+  }
+
+  return body;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -27,8 +57,8 @@ async function request<T>(
   const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
 
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `Request failed with ${response.status}`);
+    const detail = errorMessageFromBody(await response.text(), response.status);
+    throw new ApiError(response.status, detail);
   }
 
   return response.json() as Promise<T>;

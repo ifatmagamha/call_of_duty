@@ -34,7 +34,7 @@ export function MapView({
     }
 
     const map = L.map(containerRef.current, {
-      center: [-4.4419, 15.2663],
+      center: [-4.315, 15.3],
       zoom: 11,
       zoomControl: false,
     });

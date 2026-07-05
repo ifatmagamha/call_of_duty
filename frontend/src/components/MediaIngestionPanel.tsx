@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, Mic, Square } from "lucide-react";
-import { api } from "../api/client";
+import { ApiError, api } from "../api/client";
 import type { Clinic, Observation } from "../types";
 
 type Props = { clinics: Clinic[]; onApplied: () => Promise<void> };
@@ -42,7 +42,17 @@ export function MediaIngestionPanel({ clinics, onApplied }: Props) {
       setResult(response.observation);
       if (response.observation.status === "applied") await onApplied();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Media ingestion failed.");
+      if (
+        err instanceof ApiError &&
+        err.status === 503 &&
+        err.message.includes("Crusoe inference")
+      ) {
+        setError(
+          "Image and audio extraction need a Crusoe API key. Add CRUSOE_API_KEY to backend/.env and restart the backend, then try again.",
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Media ingestion failed.");
+      }
     } finally { setLoading(false); }
   }
 
