@@ -284,3 +284,39 @@
 - No queue zones defined (run with `--define-zone` to add one).
 - Status: no people currently detected in the frame.
 
+## People Report - 2026-07-05 00:53:21
+
+- **Total people detected:** 0
+- No queue zones defined (run with `--define-zone` to add one).
+- Status: no people currently detected in the frame.
+
+## People Report - 2026-07-05 00:53:26
+
+- **Total people detected:** 0
+- No queue zones defined (run with `--define-zone` to add one).
+- Status: no people currently detected in the frame.
+
+## People Report - 2026-07-05 00:53:31
+
+- **Total people detected:** 0
+- No queue zones defined (run with `--define-zone` to add one).
+- Status: no people currently detected in the frame.
+
+## People Report - 2026-07-05 00:53:36
+
+- **Total people detected:** 0
+- No queue zones defined (run with `--define-zone` to add one).
+- Status: no people currently detected in the frame.
+
+## People Report - 2026-07-05 00:53:41
+
+- **Total people detected:** 0
+- No queue zones defined (run with `--define-zone` to add one).
+- Status: no people currently detected in the frame.
+
+## People Report - 2026-07-05 00:53:46
+
+- **Total people detected:** 0
+- No queue zones defined (run with `--define-zone` to add one).
+- Status: no people currently detected in the frame.
+
