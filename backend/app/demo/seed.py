@@ -57,6 +57,36 @@ CLINICS: list[dict[str, Any]] = [
         "nurses_available": 4,
         "threshold_min_kits": 60,
     },
+    {
+        "id": "clinic-f",
+        "name": "Bacongo Response Clinic",
+        "latitude": -4.2850,
+        "longitude": 15.2420,
+        "test_kits_available": 42,
+        "people_waiting": 74,
+        "nurses_available": 2,
+        "threshold_min_kits": 45,
+    },
+    {
+        "id": "clinic-g",
+        "name": "Poto-Poto Screening Center",
+        "latitude": -4.2630,
+        "longitude": 15.2820,
+        "test_kits_available": 95,
+        "people_waiting": 38,
+        "nurses_available": 3,
+        "threshold_min_kits": 50,
+    },
+    {
+        "id": "clinic-h",
+        "name": "Talangai Health Post",
+        "latitude": -4.2220,
+        "longitude": 15.2860,
+        "test_kits_available": 28,
+        "people_waiting": 67,
+        "nurses_available": 1,
+        "threshold_min_kits": 35,
+    },
 ]
 
 WAREHOUSES: list[dict[str, Any]] = [
@@ -92,6 +122,9 @@ WAREHOUSE_ROUTES = [
     ("warehouse-w3", "clinic-e", 20, "open"),
     ("warehouse-w3", "clinic-c", 45, "open"),
     ("warehouse-w3", "clinic-d", 70, "slow"),
+    ("warehouse-w1", "clinic-f", 40, "open"),
+    ("warehouse-w1", "clinic-g", 45, "open"),
+    ("warehouse-w2", "clinic-h", 65, "slow"),
 ]
 
 CLINIC_ROUTES = [
@@ -99,6 +132,8 @@ CLINIC_ROUTES = [
     ("clinic-c", "clinic-b", 20, "open", 30),
     ("clinic-e", "clinic-d", 40, "open", 60),
     ("clinic-c", "clinic-d", 50, "slow", 30),
+    ("clinic-g", "clinic-f", 20, "open", 25),
+    ("clinic-f", "clinic-h", 35, "slow", 20),
 ]
 
 
