@@ -4,7 +4,11 @@ from datetime import datetime, timezone
 from typing import Any, Protocol
 from uuid import uuid4
 
-from app.schemas import Observation, ObservationCandidate
+from app.schemas import (
+    Observation,
+    ObservationCandidate,
+    validate_observation_candidate,
+)
 from app.services.risk_service import compute_clinic_metrics, utc_now_iso
 
 
@@ -14,36 +18,10 @@ MUTATION_FIELDS = {
     "NURSES_AVAILABLE_UPDATED": "nurses_available",
 }
 
-UPDATE_QUERIES = {
-    "QUEUE_COUNT_UPDATED": """
-        MATCH (o:Observation {id: $observation_id})-[:OBSERVED_AT]->(c:Clinic)
-        SET c.people_waiting = $new_value, c += $metrics,
-            o.status = 'applied', o.previous_value = $previous_value,
-            o.new_value = $new_value, o.reviewed_at = $reviewed_at,
-            o.previous_risk_level = $previous_risk_level,
-            o.new_risk_level = $new_risk_level, o.error_detail = null
-        RETURN o, c
-    """,
-    "TEST_KITS_UPDATED": """
-        MATCH (o:Observation {id: $observation_id})-[:OBSERVED_AT]->(c:Clinic)
-        SET c.test_kits_available = $new_value, c += $metrics,
-            o.status = 'applied', o.previous_value = $previous_value,
-            o.new_value = $new_value, o.reviewed_at = $reviewed_at,
-            o.previous_risk_level = $previous_risk_level,
-            o.new_risk_level = $new_risk_level, o.error_detail = null
-        RETURN o, c
-    """,
-    "NURSES_AVAILABLE_UPDATED": """
-        MATCH (o:Observation {id: $observation_id})-[:OBSERVED_AT]->(c:Clinic)
-        SET c.nurses_available = $new_value, c += $metrics,
-            o.status = 'applied', o.previous_value = $previous_value,
-            o.new_value = $new_value, o.reviewed_at = $reviewed_at,
-            o.previous_risk_level = $previous_risk_level,
-            o.new_risk_level = $new_risk_level, o.error_detail = null
-        RETURN o, c
-    """,
-}
+FIELD_EVENTS = {field: event_type for event_type, field in MUTATION_FIELDS.items()}
 
+# Unauthenticated free text and sampled video frames never mutate numbers unreviewed.
+REVIEW_ONLY_SOURCES = {"text", "video"}
 
 def event_mutation(event: ObservationCandidate) -> tuple[str, int] | None:
     field = MUTATION_FIELDS.get(event.event_type)
@@ -67,6 +45,31 @@ def updated_clinic_properties(
         **compute_clinic_metrics(raw),
         "last_updated_at": utc_now_iso(),
     }
+
+
+def direct_event(
+    clinic_id: str,
+    field: str,
+    value: int,
+    *,
+    source_type: str,
+    model_id: str,
+    evidence_summary: str,
+    confidence: float = 1.0,
+) -> ObservationCandidate:
+    """Event for sources that report a number directly (operators, edge cameras)."""
+    return validate_observation_candidate(
+        {
+            "event_type": FIELD_EVENTS[field],
+            "clinic_id": clinic_id,
+            "source_type": source_type,
+            "confidence": confidence,
+            "observed_at": datetime.now(timezone.utc),
+            "evidence_summary": evidence_summary,
+            "model_id": model_id,
+            field: value,
+        }
+    )
 
 
 class ObservationStore(Protocol):
@@ -104,7 +107,11 @@ class ObservationService:
         persisted, created = self.store.create(observation)
         if not created:
             return persisted
-        if event.confidence >= self.auto_apply_confidence:
+        needs_review = (
+            event.source_type in REVIEW_ONLY_SOURCES
+            and event.event_type in MUTATION_FIELDS
+        )
+        if not needs_review and event.confidence >= self.auto_apply_confidence:
             applied = self.store.apply(observation.id)
             if applied is None:
                 raise ValueError("Observation not found")

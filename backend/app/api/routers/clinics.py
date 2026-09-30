@@ -2,15 +2,28 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.schemas import AgentRecommendation, Alert, Clinic, ClinicUpdate, ResupplyOption
+from app.schemas import (
+    AgentRecommendation,
+    Alert,
+    Clinic,
+    ClinicUpdate,
+    ResupplyOption,
+    TimelineEntry,
+)
 from app.infrastructure.neo4j.client import Neo4jClient, get_neo4j_client
+from app.api.routers.observations import get_observation_service
+from app.repositories import clinics as clinic_repo
+from app.services.observation_service import ObservationService, direct_event
 from app.services.recommendation_service import (
     get_agent_recommendation,
+    get_priority_actions,
     get_resupply_options,
 )
+from app.services.observation_service import FIELD_EVENTS
 from app.services.risk_service import compute_clinic_metrics, utc_now_iso
+from app.services.timeline_service import get_timeline
 
 router = APIRouter(tags=["clinics"])
 
@@ -23,24 +36,14 @@ def _clinic_or_404(clinic: dict[str, Any] | None) -> dict[str, Any]:
 
 @router.get("/clinics", response_model=list[Clinic])
 def list_clinics(client: Neo4jClient = Depends(get_neo4j_client)):
-    def work(tx):
-        result = tx.run("MATCH (c:Clinic) RETURN c ORDER BY c.name")
-        return [dict(record["c"]) for record in result]
-
-    return client.read(work)
+    return clinic_repo.list_clinics(client)
 
 
 @router.get("/clinics/{clinic_id}", response_model=Clinic)
 def get_clinic(
     clinic_id: str, client: Neo4jClient = Depends(get_neo4j_client)
 ):
-    def work(tx):
-        record = tx.run(
-            "MATCH (c:Clinic {id: $clinic_id}) RETURN c", clinic_id=clinic_id
-        ).single()
-        return dict(record["c"]) if record else None
-
-    return _clinic_or_404(client.read(work))
+    return _clinic_or_404(clinic_repo.get_clinic(client, clinic_id))
 
 
 @router.patch("/clinics/{clinic_id}", response_model=Clinic)
@@ -48,34 +51,62 @@ def update_clinic(
     clinic_id: str,
     update: ClinicUpdate,
     client: Neo4jClient = Depends(get_neo4j_client),
+    observations: ObservationService = Depends(get_observation_service),
 ):
-    updates = update.model_dump(exclude_unset=True)
+    updates = update.model_dump(exclude_none=True)
+    clinic = _clinic_or_404(clinic_repo.get_clinic(client, clinic_id))
+    # Operational numbers go through the observation audit trail (timeline).
+    for field in FIELD_EVENTS:
+        if field in updates:
+            observations.process(
+                direct_event(
+                    clinic_id, field, updates[field],
+                    source_type="manual", model_id="operator",
+                    evidence_summary="Manual update from the operations console.",
+                )
+            )
+    # The threshold is configuration, not an observation: write it directly.
+    threshold = updates.get("threshold_min_kits")
+    if threshold is None:
+        return clinic_repo.get_clinic(client, clinic_id)
 
     def work(tx):
-        record = tx.run(
-            "MATCH (c:Clinic {id: $clinic_id}) RETURN c", clinic_id=clinic_id
-        ).single()
-        if record is None:
-            return None
-        current = dict(record["c"])
-        raw = {**current, **updates}
+        current = clinic_repo.fetch_clinic(tx, clinic_id)
+        raw = {**current, "threshold_min_kits": threshold}
         props = {
-            **updates,
+            "threshold_min_kits": threshold,
             **compute_clinic_metrics(raw),
             "last_updated_at": utc_now_iso(),
         }
-        updated = tx.run(
-            """
-            MATCH (c:Clinic {id: $clinic_id})
-            SET c += $props
-            RETURN c
-            """,
-            clinic_id=clinic_id,
-            props=props,
+        record = tx.run(
+            "MATCH (c:Clinic {id: $clinic_id}) SET c += $props RETURN c",
+            clinic_id=clinic_id, props=props,
         ).single()
-        return dict(updated["c"])
+        return dict(record["c"])
 
-    return _clinic_or_404(client.write(work))
+    return client.write(work)
+
+
+@router.get("/clinics/{clinic_id}/timeline", response_model=list[TimelineEntry])
+def clinic_timeline(
+    clinic_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    client: Neo4jClient = Depends(get_neo4j_client),
+):
+    return get_timeline(client, clinic_id, limit)
+
+
+@router.get("/timeline", response_model=list[TimelineEntry])
+def global_timeline(
+    limit: int = Query(default=50, ge=1, le=200),
+    client: Neo4jClient = Depends(get_neo4j_client),
+):
+    return get_timeline(client, None, limit)
+
+
+@router.get("/actions", response_model=list[AgentRecommendation])
+def priority_actions(client: Neo4jClient = Depends(get_neo4j_client)):
+    return get_priority_actions(client)
 
 
 @router.get(
@@ -105,49 +136,26 @@ def agent_recommendation(
 
 @router.get("/alerts", response_model=list[Alert])
 def list_alerts(client: Neo4jClient = Depends(get_neo4j_client)):
-    def work(tx):
-        result = tx.run(
-            """
-            MATCH (c:Clinic)
-            WHERE c.risk_level IN ['critical', 'high']
-               OR c.operations_remaining_hours < 2
-               OR c.test_kits_available < c.threshold_min_kits
-            RETURN c
-            ORDER BY
-              CASE c.risk_level
-                WHEN 'critical' THEN 0
-                WHEN 'high' THEN 1
-                WHEN 'medium' THEN 2
-                ELSE 3
-              END,
-              c.operations_remaining_hours ASC
-            """
+    alerts = []
+    for clinic in clinic_repo.list_alert_clinics(client):
+        reasons = []
+        if clinic["risk_level"] in {"critical", "high"}:
+            reasons.append(f"{clinic['risk_level']} risk")
+        if (
+            clinic["operations_remaining_hours"] is not None
+            and clinic["operations_remaining_hours"] < 2
+        ):
+            reasons.append("less than 2 hours of operations remaining")
+        if clinic["test_kits_available"] < clinic["threshold_min_kits"]:
+            reasons.append("stock below minimum threshold")
+        alerts.append(
+            {
+                "clinic_id": clinic["id"],
+                "clinic": clinic["name"],
+                "risk_level": clinic["risk_level"],
+                "operations_remaining_hours": clinic["operations_remaining_hours"],
+                "queue_delay_hours": clinic["queue_delay_hours"],
+                "reason": ", ".join(reasons),
+            }
         )
-        alerts = []
-        for record in result:
-            clinic = dict(record["c"])
-            reasons = []
-            if clinic["risk_level"] in {"critical", "high"}:
-                reasons.append(f"{clinic['risk_level']} risk")
-            if (
-                clinic["operations_remaining_hours"] is not None
-                and clinic["operations_remaining_hours"] < 2
-            ):
-                reasons.append("less than 2 hours of operations remaining")
-            if clinic["test_kits_available"] < clinic["threshold_min_kits"]:
-                reasons.append("stock below minimum threshold")
-            alerts.append(
-                {
-                    "clinic_id": clinic["id"],
-                    "clinic": clinic["name"],
-                    "risk_level": clinic["risk_level"],
-                    "operations_remaining_hours": clinic[
-                        "operations_remaining_hours"
-                    ],
-                    "queue_delay_hours": clinic["queue_delay_hours"],
-                    "reason": ", ".join(reasons),
-                }
-            )
-        return alerts
-
-    return client.read(work)
+    return alerts

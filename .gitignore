@@ -12,3 +12,7 @@ __pycache__/
 docs/*
 /fixtures/
 /demo/
+
+.agents/*
+.kilo/*
+

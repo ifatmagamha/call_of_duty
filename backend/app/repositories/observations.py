@@ -5,11 +5,23 @@ from typing import Any
 from app.schemas import Observation, ObservationCandidate, validate_observation_candidate
 from app.services.observation_service import (
     MUTATION_FIELDS,
-    UPDATE_QUERIES,
     event_mutation,
     updated_clinic_properties,
 )
 from app.services.risk_service import utc_now_iso
+
+
+# Only backend-computed clinic properties (an allowlisted field plus recomputed
+# metrics) ever reach $props; model output never shapes this query.
+APPLY_QUERY = """
+    MATCH (o:Observation {id: $observation_id})-[:OBSERVED_AT]->(c:Clinic)
+    SET c += $props,
+        o.status = 'applied', o.previous_value = $previous_value,
+        o.new_value = $new_value, o.reviewed_at = $reviewed_at,
+        o.previous_risk_level = $previous_risk_level,
+        o.new_risk_level = $new_risk_level, o.error_detail = null
+    RETURN o, c
+"""
 
 
 class Neo4jObservationRepository:
@@ -133,11 +145,10 @@ class Neo4jObservationRepository:
             clinic = dict(record["c"])
             props = updated_clinic_properties(clinic, event)
             updated = tx.run(
-                UPDATE_QUERIES[event.event_type], observation_id=observation_id,
+                APPLY_QUERY, observation_id=observation_id, props=props,
                 previous_value=clinic[field], new_value=new_value,
                 reviewed_at=reviewed_at, previous_risk_level=clinic.get("risk_level"),
                 new_risk_level=props["risk_level"],
-                metrics={key: value for key, value in props.items() if key != field},
             ).single()
             return self._from_node(updated["o"])
         return self.client.write(work)
@@ -162,6 +173,3 @@ class Neo4jObservationRepository:
             raise ValueError(f"Observation is already {existing['o']['status']}")
         return self.client.write(work)
 
-
-# Transitional name for callers that used the old service-local store.
-Neo4jObservationStore = Neo4jObservationRepository

@@ -16,6 +16,7 @@ CLINICS: list[dict[str, Any]] = [
         "people_waiting": 30,
         "nurses_available": 3,
         "threshold_min_kits": 50,
+        "region": "Kinshasa",
     },
     {
         "id": "clinic-b",
@@ -26,6 +27,7 @@ CLINICS: list[dict[str, Any]] = [
         "people_waiting": 96,
         "nurses_available": 2,
         "threshold_min_kits": 50,
+        "region": "Kinshasa",
     },
     {
         "id": "clinic-c",
@@ -36,6 +38,7 @@ CLINICS: list[dict[str, Any]] = [
         "people_waiting": 45,
         "nurses_available": 2,
         "threshold_min_kits": 40,
+        "region": "Kinshasa",
     },
     {
         "id": "clinic-d",
@@ -46,6 +49,7 @@ CLINICS: list[dict[str, Any]] = [
         "people_waiting": 60,
         "nurses_available": 1,
         "threshold_min_kits": 30,
+        "region": "Kinshasa",
     },
     {
         "id": "clinic-e",
@@ -56,6 +60,7 @@ CLINICS: list[dict[str, Any]] = [
         "people_waiting": 25,
         "nurses_available": 4,
         "threshold_min_kits": 60,
+        "region": "Kinshasa",
     },
     {
         "id": "clinic-f",
@@ -66,6 +71,7 @@ CLINICS: list[dict[str, Any]] = [
         "people_waiting": 74,
         "nurses_available": 2,
         "threshold_min_kits": 45,
+        "region": "Brazzaville",
     },
     {
         "id": "clinic-g",
@@ -76,6 +82,7 @@ CLINICS: list[dict[str, Any]] = [
         "people_waiting": 38,
         "nurses_available": 3,
         "threshold_min_kits": 50,
+        "region": "Brazzaville",
     },
     {
         "id": "clinic-h",
@@ -86,6 +93,7 @@ CLINICS: list[dict[str, Any]] = [
         "people_waiting": 67,
         "nurses_available": 1,
         "threshold_min_kits": 35,
+        "region": "Brazzaville",
     },
 ]
 
@@ -127,14 +135,6 @@ WAREHOUSE_ROUTES = [
     ("warehouse-w2", "clinic-h", 65, "slow"),
 ]
 
-CLINIC_ROUTES = [
-    ("clinic-a", "clinic-b", 15, "open", 40),
-    ("clinic-c", "clinic-b", 20, "open", 30),
-    ("clinic-e", "clinic-d", 40, "open", 60),
-    ("clinic-c", "clinic-d", 50, "slow", 30),
-    ("clinic-g", "clinic-f", 20, "open", 25),
-    ("clinic-f", "clinic-h", 35, "slow", 20),
-]
 
 
 def seed_demo_graph(client: Neo4jClient) -> dict[str, int]:
@@ -212,34 +212,6 @@ def seed_demo_graph(client: Neo4jClient) -> dict[str, int]:
                     "road_status": road_status,
                 }
                 for source_id, target_id, delivery_time, road_status in WAREHOUSE_ROUTES
-            ],
-        )
-        tx.run(
-            """
-            UNWIND $routes AS route
-            MATCH (source:Clinic {id: route.source_id})
-            MATCH (target:Clinic {id: route.target_id})
-            CREATE (source)-[:CAN_SUPPLY {
-              delivery_time_minutes: route.delivery_time_minutes,
-              road_status: route.road_status,
-              max_transfer_kits: route.max_transfer_kits
-            }]->(target)
-            """,
-            routes=[
-                {
-                    "source_id": source_id,
-                    "target_id": target_id,
-                    "delivery_time_minutes": delivery_time,
-                    "road_status": road_status,
-                    "max_transfer_kits": max_transfer,
-                }
-                for (
-                    source_id,
-                    target_id,
-                    delivery_time,
-                    road_status,
-                    max_transfer,
-                ) in CLINIC_ROUTES
             ],
         )
         return {"clinics": len(clinics), "warehouses": len(warehouses)}

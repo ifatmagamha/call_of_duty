@@ -28,7 +28,9 @@ export function AgentReasoningPanel({
     return <div className="panel-muted">Clinic recommendations appear here.</div>;
   }
 
-  const proposals = recommendation.options.slice(0, 3);
+  const proposals = recommendation.options
+    .filter((option) => option.recommended_transfer_quantity > 0)
+    .slice(0, 3);
   const ongoingForClinic = transfers.some(
     (transfer) => transfer.target_clinic_id === recommendation.clinic_id,
   );
@@ -66,48 +68,13 @@ export function AgentReasoningPanel({
         </div>
       </div>
 
-      <div className="agent-source">
-        {recommendation.llm_used
-          ? `LLM: ${recommendation.llm_provider} (${recommendation.llm_model})`
-          : "Deterministic backend explanation"}
-      </div>
+      <div className="agent-source">Deterministic backend explanation</div>
 
       <ul className="reason-list">
         {recommendation.reasoning.map((reason) => (
           <li key={reason}>{reason}</li>
         ))}
       </ul>
-
-      {recommendation.llm_agent && (
-        <section className="llm-agent-panel">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="eyebrow">LLM agent</p>
-              <h3>{recommendation.llm_agent.proposed_action}</h3>
-            </div>
-            <span
-              className={`agent-status ${
-                recommendation.llm_agent.available ? "agent-on" : "agent-off"
-              }`}
-            >
-              {recommendation.llm_agent.available ? "Active" : "Needs key"}
-            </span>
-          </div>
-          <div className="agent-source">
-            {recommendation.llm_agent.provider}
-            {recommendation.llm_agent.model
-              ? ` (${recommendation.llm_agent.model})`
-              : ""}
-          </div>
-          {recommendation.llm_agent.reasoning_summary.length > 0 && (
-            <ul className="reason-list">
-              {recommendation.llm_agent.reasoning_summary.map((reason) => (
-                <li key={reason}>{reason}</li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
 
       {actionMessage && (
         <article className="action-card">
@@ -166,25 +133,6 @@ export function AgentReasoningPanel({
         </div>
       )}
 
-      {transfers.length > 0 && (
-        <div className="space-y-2">
-          <p className="eyebrow">Transfers ongoing</p>
-          {transfers.map((transfer) => (
-            <article className="transfer-card" key={transfer.id}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3>{transfer.quantity} kits to {transfer.target_clinic_name}</h3>
-                  <p>
-                    {transfer.source_name} • {transfer.delivery_time_minutes} min •{" "}
-                    {transfer.road_status} route
-                  </p>
-                </div>
-                <span className="transfer-status">{transfer.status}</span>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
     </section>
   );
 }

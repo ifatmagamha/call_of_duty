@@ -6,7 +6,11 @@ from uuid import uuid4
 from app.schemas import Transfer
 from app.infrastructure.neo4j.client import Neo4jClient
 from app.services.recommendation_service import SAFE_ROAD_STATUSES
-from app.services.risk_service import recommended_transfer_quantity, utc_now_iso
+from app.services.risk_service import (
+    compute_clinic_metrics,
+    recommended_transfer_quantity,
+    utc_now_iso,
+)
 
 
 class TransferError(ValueError):
@@ -140,3 +144,45 @@ def list_transfers(
         return [_transfer_from_record(record) for record in result]
 
     return client.read(work)
+
+
+def complete_transfer(client: Neo4jClient, transfer_id: str) -> Transfer:
+    """Mark delivery: add the reserved kits to the clinic and recompute its risk."""
+
+    def work(tx):
+        record = tx.run(
+            """
+            MATCH (source:Warehouse)-[:TRANSFER_SOURCE]->(transfer:Transfer {id: $transfer_id})
+                  -[:TRANSFER_TARGET]->(target:Clinic)
+            RETURN transfer, source, target
+            """,
+            transfer_id=transfer_id,
+        ).single()
+        if record is None:
+            raise TransferError("Transfer not found.")
+        transfer = dict(record["transfer"])
+        if transfer["status"] != "ongoing":
+            raise TransferError(f"Transfer is already {transfer['status']}.")
+        target = dict(record["target"])
+        kits = target["test_kits_available"] + transfer["quantity"]
+        now = utc_now_iso()
+        metrics = {
+            **compute_clinic_metrics({**target, "test_kits_available": kits}),
+            "test_kits_available": kits,
+            "last_updated_at": now,
+        }
+        updated = tx.run(
+            """
+            MATCH (source:Warehouse)-[:TRANSFER_SOURCE]->(transfer:Transfer {id: $transfer_id})
+                  -[:TRANSFER_TARGET]->(target:Clinic)
+            WHERE transfer.status = 'ongoing'
+            SET target += $metrics,
+                transfer.status = 'completed', transfer.updated_at = $now,
+                transfer.completed_at = $now
+            RETURN transfer, source, target
+            """,
+            transfer_id=transfer_id, metrics=metrics, now=now,
+        ).single()
+        return _transfer_from_record(updated)
+
+    return client.write(work)

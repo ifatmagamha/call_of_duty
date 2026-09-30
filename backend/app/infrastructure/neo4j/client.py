@@ -37,11 +37,3 @@ neo4j_client = Neo4jClient()
 
 def get_neo4j_client() -> Neo4jClient:
     return neo4j_client
-
-
-def props(value: Any) -> Any:
-    if value is None:
-        return None
-    if hasattr(value, "items"):
-        return dict(value)
-    return value

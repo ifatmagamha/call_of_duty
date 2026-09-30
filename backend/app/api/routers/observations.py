@@ -3,7 +3,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.config import Settings, get_settings
-from app.schemas import Observation
+from app.schemas import Observation, ObservationSourceType
 from app.infrastructure.neo4j.client import Neo4jClient, get_neo4j_client
 from app.repositories.observations import Neo4jObservationRepository
 from app.services.observation_service import ObservationService
@@ -25,7 +25,7 @@ def get_observation_service(
 def list_observations(
     status: Literal["pending_review", "applied", "rejected", "failed"] | None = None,
     clinic_id: str | None = None,
-    source_type: Literal["image", "audio", "manual"] | None = None,
+    source_type: ObservationSourceType | None = None,
     limit: int = Query(default=100, ge=1, le=200),
     service: ObservationService = Depends(get_observation_service),
 ):

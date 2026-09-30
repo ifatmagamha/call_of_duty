@@ -75,3 +75,44 @@ def test_observation_persistence_relationship_review_audit_and_recomputation():
         assert service.store.get("integration-reject").status == "rejected"
     finally:
         client.close()
+
+
+def test_mvp_loop_camera_manual_dispatch_delivery_timeline_and_actions():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = Neo4jClient()
+    try:
+        seed_demo_graph(client)
+        api = TestClient(app)
+
+        actions = api.get("/actions").json()
+        assert actions[0]["status"] in {"critical", "high"}
+        assert {a["clinic_id"] for a in actions} >= {"clinic-b", "clinic-d"}
+
+        camera = api.post(
+            "/ingestion/camera",
+            json={"clinic_id": "clinic-b", "camera_id": "cam-b", "people_count": 130},
+        ).json()
+        assert camera["status"] == "applied" and camera["previous_value"] == 96
+
+        clinic = api.patch("/clinics/clinic-b", json={"nurses_available": 3}).json()
+        assert clinic["nurses_available"] == 3 and clinic["people_waiting"] == 130
+
+        transfer = api.post("/clinics/clinic-b/transfers", json={"source_id": "warehouse-w1"}).json()
+        delivered = api.post(f"/transfers/{transfer['id']}/complete").json()
+        assert delivered["status"] == "completed"
+        assert api.post(f"/transfers/{transfer['id']}/complete").status_code == 409
+        after = api.get("/clinics/clinic-b").json()
+        assert after["test_kits_available"] == 35 + transfer["quantity"]
+
+        timeline = api.get("/clinics/clinic-b/timeline").json()
+        titles = [entry["title"] for entry in timeline]
+        assert titles[0].endswith("kits delivered from Central Medical Warehouse")
+        assert "People waiting 96 → 130" in titles
+        assert "Nurses 2 → 3" in titles
+        assert any(entry["source_type"] == "manual" for entry in timeline)
+        assert api.get("/timeline").json()[0]["clinic_id"] == "clinic-b"
+    finally:
+        client.close()

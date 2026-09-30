@@ -18,6 +18,7 @@ class ClinicBase(BaseModel):
     people_waiting: int = Field(ge=0)
     nurses_available: int = Field(ge=0)
     threshold_min_kits: int = Field(ge=0)
+    region: str = "Unassigned"
 
 
 class Clinic(ClinicBase):
@@ -58,20 +59,9 @@ class ResupplyOption(BaseModel):
     road_status: RoadStatus
     recommended_transfer_quantity: int
     supplier_remaining_stock_after_transfer: int
-    supplier_operations_remaining_after_transfer: Optional[float]
-    is_safe_for_supplier: bool
     can_fully_supply: bool
     rank: int
     reason: str
-
-
-class LLMAgentNote(BaseModel):
-    available: bool
-    provider: str
-    model: Optional[str] = None
-    reasoning_summary: list[str] = Field(default_factory=list)
-    proposed_action: str
-    data_sources: list[str] = Field(default_factory=list)
 
 
 class AgentRecommendation(BaseModel):
@@ -81,11 +71,7 @@ class AgentRecommendation(BaseModel):
     reasoning: list[str]
     recommendation: str
     options: list[ResupplyOption]
-    llm_used: bool = False
-    llm_provider: str = "deterministic"
-    llm_model: Optional[str] = None
     data_sources: list[str] = Field(default_factory=list)
-    llm_agent: Optional[LLMAgentNote] = None
 
 
 class SupplyLink(BaseModel):
@@ -129,3 +115,24 @@ class Alert(BaseModel):
     operations_remaining_hours: Optional[float]
     queue_delay_hours: Optional[float]
     reason: str
+
+
+class CameraReading(BaseModel):
+    clinic_id: str = Field(min_length=1)
+    camera_id: str = Field(min_length=1, max_length=64)
+    people_count: int = Field(ge=0, le=10_000)
+    confidence: float = Field(default=1.0, ge=0, le=1)
+
+
+class TimelineEntry(BaseModel):
+    id: str
+    kind: Literal["observation", "transfer"]
+    clinic_id: str
+    clinic_name: str
+    at: str
+    title: str
+    detail: str
+    status: str
+    source_type: Optional[str] = None
+    field: Optional[str] = None
+    value: Optional[int] = None

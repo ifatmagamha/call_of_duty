@@ -66,14 +66,13 @@ export function MapView({
     supplyLinks.forEach((link) => {
       const touchesSelection =
         selected?.id === link.source_id || selected?.id === link.target_id;
-      const isWarehouseRoute = link.source_type === "warehouse";
       const line = L.polyline(
         [
           [link.source_latitude, link.source_longitude],
           [link.target_latitude, link.target_longitude],
         ],
         {
-          color: isWarehouseRoute ? "#315b87" : "#1f6b59",
+          color: "#315b87",
           dashArray: link.road_status === "slow" ? "8 7" : undefined,
           opacity: touchesSelection ? 0.95 : 0.34,
           weight: touchesSelection ? 4 : 2,
@@ -92,11 +91,13 @@ export function MapView({
           className: "",
           html: `<span class="clinic-marker ${RISK_CLASS[clinic.risk_level]} ${
             isSelected ? "marker-selected" : ""
-          }"></span>`,
+          }"></span><small class="marker-count">${clinic.people_waiting}</small>`,
           iconSize: [22, 22],
           iconAnchor: [11, 11],
         }),
-      }).bindTooltip(clinic.name);
+      }).bindTooltip(
+        `${clinic.name} · ${clinic.risk_level} · ${clinic.people_waiting} waiting · ${clinic.test_kits_available} kits`,
+      );
       marker.on("click", () => onSelect({ type: "clinic", id: clinic.id }));
       marker.addTo(layer);
     });

@@ -2,7 +2,7 @@ import pytest
 
 from app.core.config import Settings
 from app.schemas import SituationBriefing
-from app.inference.situation_agent import SituationAgent
+from app.inference.agents import SituationAgent
 
 
 class FakeClient:

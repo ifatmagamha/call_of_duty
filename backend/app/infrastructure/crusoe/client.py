@@ -13,6 +13,7 @@ from app.schemas import (
     AudioExtractionResult,
     ImageExtractionResult,
     ProviderMetadata,
+    SituationAnswer,
     SituationBriefing,
     validate_observation_candidate,
     validate_situation_briefing,
@@ -204,6 +205,45 @@ class CrusoeClient:
         )
         return validate_situation_briefing(
             json.loads(self._content(completion)), valid_clinic_ids
+        )
+
+    async def extract_text(self, report: str, prompt: str) -> ImageExtractionResult:
+        completion = await self._create(
+            "text",
+            [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": report},
+            ],
+            observation_candidate_adapter.json_schema(),
+        )
+        event = observation_candidate_adapter.validate_json(self._content(completion))
+        return ImageExtractionResult(event=event, metadata=self._metadata(completion))
+
+    async def answer_question(
+        self,
+        snapshot: dict[str, Any],
+        question: str,
+        prompt: str,
+        valid_clinic_ids: set[str],
+    ) -> SituationAnswer:
+        completion = await self._create(
+            "situation",
+            [
+                {"role": "system", "content": prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {"snapshot": snapshot, "question": question},
+                        separators=(",", ":"),
+                    ),
+                },
+            ],
+            SituationAnswer.model_json_schema(),
+            extra_body={"chat_template_kwargs": {"thinking": False}},
+        )
+        return SituationAnswer.model_validate(
+            json.loads(self._content(completion)),
+            context={"valid_clinic_ids": valid_clinic_ids},
         )
 
     async def list_models(self) -> list[str]:

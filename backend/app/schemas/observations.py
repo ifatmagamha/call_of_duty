@@ -6,7 +6,7 @@ from typing import Annotated, Literal, Union
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
 
 
-ObservationSourceType = Literal["image", "audio", "manual"]
+ObservationSourceType = Literal["image", "audio", "video", "text", "camera", "manual"]
 ObservationStatus = Literal["pending_review", "applied", "rejected", "failed"]
 NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 

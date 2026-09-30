@@ -10,7 +10,11 @@ import type {
   Observation,
   ObservationSourceType,
   ObservationStatus,
+  SituationAnswer,
   SituationBriefing,
+  TextChannel,
+  TimelineEntry,
+  VideoIngestionResponse,
 } from "../types";
 
 const API_BASE_URL =
@@ -86,6 +90,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ source_id: sourceId }),
     }),
+  completeTransfer: (transferId: string) =>
+    request<Transfer>(`/transfers/${transferId}/complete`, { method: "POST" }),
+  getTimeline: (clinicId?: string, limit = 50) =>
+    request<TimelineEntry[]>(
+      clinicId
+        ? `/clinics/${clinicId}/timeline?limit=${limit}`
+        : `/timeline?limit=${limit}`,
+    ),
+  getActions: () => request<AgentRecommendation[]>("/actions"),
   getWarehouse: (warehouseId: string) =>
     request<Warehouse>(`/warehouses/${warehouseId}`),
   getAgentRecommendation: (clinicId: string) =>
@@ -104,6 +117,17 @@ export const api = {
     if (clinicHint) body.append("clinic_hint", clinicHint);
     return request<AudioIngestionResponse>("/ingestion/audio", { method: "POST", body });
   },
+  ingestVideo: (file: File, clinicHint?: string) => {
+    const body = new FormData();
+    body.append("file", file);
+    if (clinicHint) body.append("clinic_hint", clinicHint);
+    return request<VideoIngestionResponse>("/ingestion/video", { method: "POST", body });
+  },
+  ingestText: (text: string, channel: TextChannel, clinicHint?: string) =>
+    request<ImageIngestionResponse>("/ingestion/text", {
+      method: "POST",
+      body: JSON.stringify({ text, channel, clinic_hint: clinicHint || null }),
+    }),
   getObservations: (filters: {
     status?: ObservationStatus;
     clinicId?: string;
@@ -125,5 +149,10 @@ export const api = {
     request<SituationBriefing>("/briefings/generate", {
       method: "POST",
       body: JSON.stringify({ window_hours: windowHours }),
+    }),
+  ask: (question: string, windowHours = 24) =>
+    request<SituationAnswer>("/briefings/ask", {
+      method: "POST",
+      body: JSON.stringify({ question, window_hours: windowHours }),
     }),
 };

@@ -59,6 +59,51 @@ class AudioObservationAgent:
         return result
 
 
+class TextObservationAgent:
+    def __init__(self, client, settings: Settings):
+        self.client = client
+        self.settings = settings
+
+    async def extract(
+        self, report: str, channel: str, known_clinic_ids: list[str], clinic_hint: str | None
+    ):
+        result = await self.client.extract_text(
+            f"CHANNEL: {channel}\nREPORT:\n{report}",
+            _prompt("text_observation.md", known_clinic_ids, clinic_hint),
+        )
+        result.event = result.event.model_copy(
+            update={
+                "source_type": "text",
+                "model_id": self.settings.crusoe_text_model,
+                "request_id": result.metadata.request_id,
+                "raw_text": report,
+            }
+        )
+        return result
+
+
+class VideoObservationAgent:
+    def __init__(self, client, settings: Settings):
+        self.client = client
+        self.settings = settings
+
+    async def extract(
+        self, contact_sheet_url: str, known_clinic_ids: list[str], clinic_hint: str | None
+    ):
+        result = await self.client.extract_image(
+            contact_sheet_url,
+            _prompt("video_observation.md", known_clinic_ids, clinic_hint),
+        )
+        result.event = result.event.model_copy(
+            update={
+                "source_type": "video",
+                "model_id": self.settings.crusoe_image_model,
+                "request_id": result.metadata.request_id,
+            }
+        )
+        return result
+
+
 class SituationAgent:
     def __init__(self, client, settings: Settings):
         self.client = client
@@ -78,3 +123,9 @@ class SituationAgent:
                 "source_observation_ids": snapshot["source_observation_ids"],
             }
         )
+
+    async def answer(self, snapshot, question: str):
+        valid_ids = {clinic["id"] for clinic in snapshot["clinics"]}
+        prompt = (PROMPT_DIR / "situation_question.md").read_text(encoding="utf-8")
+        answer = await self.client.answer_question(snapshot, question, prompt, valid_ids)
+        return answer.model_copy(update={"model_id": self.settings.crusoe_situation_model})

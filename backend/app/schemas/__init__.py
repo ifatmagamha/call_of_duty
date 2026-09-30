@@ -1,5 +1,7 @@
 from .briefings import (
+    AskRequest,
     BriefingGenerateRequest,
+    SituationAnswer,
     CenterMessage,
     SituationBriefing,
     validate_situation_briefing,
@@ -7,15 +9,16 @@ from .briefings import (
 from .domain import (
     AgentRecommendation,
     Alert,
+    CameraReading,
     Clinic,
     ClinicBase,
     ClinicUpdate,
-    LLMAgentNote,
     ResupplyOption,
     RiskLevel,
     RoadStatus,
     SupplyLink,
     SupplySourceType,
+    TimelineEntry,
     Transfer,
     TransferCreate,
     TransferStatus,
@@ -29,6 +32,8 @@ from .inference import (
     ImageExtractionResult,
     ImageIngestionResponse,
     ProviderMetadata,
+    TextReport,
+    VideoIngestionResponse,
 )
 from .diagnostics import CrusoeDiagnostic, Neo4jDiagnostic
 from .observations import (
@@ -42,8 +47,5 @@ from .observations import (
     TestKitsUpdated,
     validate_observation_candidate,
 )
-
-# Backward-compatible name used by graph/resupply code.
-SourceType = SupplySourceType
 
 __all__ = [name for name in globals() if not name.startswith("_")]

@@ -9,6 +9,7 @@ export type Clinic = {
   people_waiting: number;
   nurses_available: number;
   threshold_min_kits: number;
+  region: string;
   testing_capacity_per_hour: number;
   queue_delay_hours: number | null;
   operations_remaining_hours: number | null;
@@ -51,20 +52,9 @@ export type ResupplyOption = {
   road_status: "open" | "slow" | "blocked" | "unknown";
   recommended_transfer_quantity: number;
   supplier_remaining_stock_after_transfer: number;
-  supplier_operations_remaining_after_transfer: number | null;
-  is_safe_for_supplier: boolean;
   can_fully_supply: boolean;
   rank: number;
   reason: string;
-};
-
-export type LLMAgentNote = {
-  available: boolean;
-  provider: string;
-  model: string | null;
-  reasoning_summary: string[];
-  proposed_action: string;
-  data_sources: string[];
 };
 
 export type AgentRecommendation = {
@@ -74,11 +64,7 @@ export type AgentRecommendation = {
   reasoning: string[];
   recommendation: string;
   options: ResupplyOption[];
-  llm_used: boolean;
-  llm_provider: string;
-  llm_model: string | null;
   data_sources: string[];
-  llm_agent: LLMAgentNote | null;
 };
 
 export type Transfer = {
@@ -106,7 +92,7 @@ export type ClinicUpdate = {
   threshold_min_kits?: number;
 };
 
-export type ObservationSourceType = "image" | "audio" | "manual";
+export type ObservationSourceType = "image" | "audio" | "video" | "text" | "camera" | "manual";
 export type ObservationStatus = "pending_review" | "applied" | "rejected" | "failed";
 
 type ObservationCommon = {
@@ -148,6 +134,35 @@ export type ImageIngestionResponse = {
 };
 
 export type AudioIngestionResponse = ImageIngestionResponse & { transcript: string };
+
+export type VideoIngestionResponse = ImageIngestionResponse & {
+  sampled_frames: number;
+  duration_seconds: number;
+};
+
+export type TextChannel = "sms" | "phone_transcript" | "field_report" | "other";
+
+export type TimelineEntry = {
+  id: string;
+  kind: "observation" | "transfer";
+  clinic_id: string;
+  clinic_name: string;
+  at: string;
+  title: string;
+  detail: string;
+  status: string;
+  source_type: string | null;
+  field: string | null;
+  value: number | null;
+};
+
+export type SituationAnswer = {
+  answer: string;
+  referenced_clinic_ids: string[];
+  suggested_actions: string[];
+  generated_at: string | null;
+  model_id: string | null;
+};
 
 export type SituationBriefing = {
   global_status: "stable" | "watch" | "degrading" | "critical";

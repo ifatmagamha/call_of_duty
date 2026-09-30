@@ -4,17 +4,11 @@ from typing import Any
 
 from app.schemas import AgentRecommendation, ResupplyOption
 from app.infrastructure.neo4j.client import Neo4jClient
+from app.repositories.clinics import fetch_clinic, list_alert_clinics
 from app.services.risk_service import recommended_transfer_quantity
 
 
 SAFE_ROAD_STATUSES = {"open", "slow"}
-
-
-def _load_clinic(tx, clinic_id: str) -> dict[str, Any] | None:
-    record = tx.run(
-        "MATCH (c:Clinic {id: $clinic_id}) RETURN c", clinic_id=clinic_id
-    ).single()
-    return dict(record["c"]) if record else None
 
 
 def _load_ongoing_transfer(tx, clinic_id: str) -> dict[str, Any] | None:
@@ -46,7 +40,7 @@ def get_resupply_options(
     client: Neo4jClient, clinic_id: str
 ) -> list[ResupplyOption]:
     def work(tx):
-        target = _load_clinic(tx, clinic_id)
+        target = fetch_clinic(tx, clinic_id)
         if target is None:
             return None
 
@@ -72,8 +66,6 @@ def get_resupply_options(
 
             transfer = min(needed, route_cap) if needed > 0 else 0
             remaining_stock = available_stock - transfer
-            supplier_ops_after = None
-            is_safe_for_supplier = True
 
             can_fully_supply = needed == 0 or transfer >= needed
             reason_parts = []
@@ -97,8 +89,6 @@ def get_resupply_options(
                     "road_status": route["road_status"],
                     "recommended_transfer_quantity": transfer,
                     "supplier_remaining_stock_after_transfer": remaining_stock,
-                    "supplier_operations_remaining_after_transfer": supplier_ops_after,
-                    "is_safe_for_supplier": is_safe_for_supplier,
                     "can_fully_supply": can_fully_supply,
                     "reason": " ".join(reason_parts),
                 }
@@ -126,7 +116,7 @@ def get_agent_recommendation(
     client: Neo4jClient, clinic_id: str
 ) -> AgentRecommendation:
     def load_context(tx):
-        return _load_clinic(tx, clinic_id), _load_ongoing_transfer(tx, clinic_id)
+        return fetch_clinic(tx, clinic_id), _load_ongoing_transfer(tx, clinic_id)
 
     clinic, ongoing_transfer = client.read(load_context)
     if clinic is None:
@@ -207,8 +197,6 @@ def get_agent_recommendation(
         reasoning=reasoning,
         recommendation=recommendation,
         options=options,
-        llm_used=False,
-        llm_provider="deterministic",
         data_sources=[
             "neo4j:Clinic",
             "neo4j:Warehouse",
@@ -219,3 +207,13 @@ def get_agent_recommendation(
         ],
     )
     return deterministic
+
+
+def get_priority_actions(client: Neo4jClient) -> list[AgentRecommendation]:
+    """Clinics needing action, most urgent first, each with its deterministic plan."""
+
+    # ponytail: one recommendation query per clinic; batch it if clinics reach the hundreds.
+    return [
+        get_agent_recommendation(client, clinic["id"])
+        for clinic in list_alert_clinics(client)
+    ]

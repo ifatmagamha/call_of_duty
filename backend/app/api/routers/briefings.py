@@ -4,11 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
 
 from app.core.config import Settings, get_settings
-from app.schemas import BriefingGenerateRequest, SituationBriefing
+from app.schemas import (
+    AskRequest,
+    BriefingGenerateRequest,
+    SituationAnswer,
+    SituationBriefing,
+)
 from app.infrastructure.neo4j.client import Neo4jClient, get_neo4j_client
 from app.api.routers.ingestion import get_crusoe_client
 from app.infrastructure.crusoe.client import CrusoeClient, CrusoeError
-from app.inference.situation_agent import SituationAgent
+from app.inference.agents import SituationAgent
+from app.services.recommendation_service import get_priority_actions
 from app.services.situation_service import SituationService
 
 
@@ -38,3 +44,26 @@ async def generate_briefing(
             "source_observation_ids": snapshot["source_observation_ids"],
         }
     )
+
+
+@router.post("/ask", response_model=SituationAnswer)
+async def ask_situation(
+    request: AskRequest,
+    settings: Settings = Depends(get_settings),
+    graph: Neo4jClient = Depends(get_neo4j_client),
+    crusoe: CrusoeClient = Depends(get_crusoe_client),
+):
+    snapshot = SituationService(graph).build_snapshot(request.window_hours)
+    snapshot["priority_actions"] = [
+        {"clinic_id": item.clinic_id, "recommendation": item.recommendation}
+        for item in get_priority_actions(graph)
+    ]
+    try:
+        answer = await SituationAgent(crusoe, settings).answer(snapshot, request.question)
+    except CrusoeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (ValidationError, ValueError) as exc:
+        raise HTTPException(
+            status_code=502, detail="Crusoe returned an invalid answer."
+        ) from exc
+    return answer.model_copy(update={"generated_at": datetime.now(timezone.utc)})

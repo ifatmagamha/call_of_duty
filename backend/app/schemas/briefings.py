@@ -45,3 +45,23 @@ def validate_situation_briefing(
 
 class BriefingGenerateRequest(BaseModel):
     window_hours: int = Field(default=24, ge=1, le=168)
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=500)
+    window_hours: int = Field(default=24, ge=1, le=168)
+
+
+class SituationAnswer(BaseModel):
+    answer: str = Field(min_length=1)
+    referenced_clinic_ids: list[str]
+    suggested_actions: list[str]
+    generated_at: datetime | None = None
+    model_id: str | None = None
+
+    @model_validator(mode="after")
+    def known_clinic_references(self, info: ValidationInfo):
+        valid_ids = (info.context or {}).get("valid_clinic_ids")
+        if valid_ids is not None and set(self.referenced_clinic_ids) - valid_ids:
+            raise ValueError("answer references an unknown clinic")
+        return self

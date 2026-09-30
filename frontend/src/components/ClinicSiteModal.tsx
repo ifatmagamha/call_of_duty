@@ -1,19 +1,22 @@
-import { Activity, Clock, MapPin, Package, Users } from "lucide-react";
-import queueImage from "../assets/clinic-queue.png";
+import { Activity, CheckCircle2, Clock, MapPin, Package, Users } from "lucide-react";
 import type {
   AgentRecommendation,
   Clinic,
   ClinicUpdate,
   ResupplyOption,
+  TimelineEntry,
   Transfer,
 } from "../types";
+import { formatHours } from "../format";
 import { AgentReasoningPanel } from "./AgentReasoningPanel";
 import { ClinicUpdateForm } from "./ClinicUpdateForm";
+import { Sparkline, TimelineList } from "./TimelineList";
 
 type ClinicSiteModalProps = {
   clinic: Clinic | null;
   recommendation: AgentRecommendation | null;
   transfers: Transfer[];
+  timeline: TimelineEntry[];
   loading: boolean;
   loadingAgent: boolean;
   validatingSourceId: string | null;
@@ -21,16 +24,14 @@ type ClinicSiteModalProps = {
   onClinicUpdate: (update: ClinicUpdate) => Promise<void>;
   onValidateTransfer: (option: ResupplyOption) => Promise<void>;
   onRejectTransfer: () => void;
+  onCompleteTransfer: (transfer: Transfer) => Promise<void>;
 };
-
-function formatHours(value: number | null) {
-  return value === null ? "n/a" : `${value.toFixed(2)} h`;
-}
 
 export function ClinicSiteModal({
   clinic,
   recommendation,
   transfers,
+  timeline,
   loading,
   loadingAgent,
   validatingSourceId,
@@ -38,6 +39,7 @@ export function ClinicSiteModal({
   onClinicUpdate,
   onValidateTransfer,
   onRejectTransfer,
+  onCompleteTransfer,
 }: ClinicSiteModalProps) {
   if (loading) {
     return <div className="panel-muted">Loading selected clinic...</div>;
@@ -55,13 +57,9 @@ export function ClinicSiteModal({
   return (
     <div className="clinic-site-layout">
       <section className="clinic-site-left">
-        <figure className="clinic-queue-figure">
-          <img src={queueImage} alt="People waiting in line outside a clinic" />
-        </figure>
-
         <div className="clinic-indicator-header">
           <div>
-            <p className="eyebrow">Indicators</p>
+            <p className="eyebrow">{clinic.region} · Indicators</p>
             <h3>{clinic.name}</h3>
           </div>
           <span className={`risk-pill risk-${clinic.risk_level}`}>
@@ -110,6 +108,16 @@ export function ClinicSiteModal({
           </div>
         </dl>
 
+        <div>
+          <p className="eyebrow">People waiting · trend</p>
+          <Sparkline entries={timeline} field="people_waiting" />
+        </div>
+
+        <div>
+          <p className="eyebrow">Timeline</p>
+          <TimelineList entries={timeline} />
+        </div>
+
         <ClinicUpdateForm clinic={clinic} onSubmit={onClinicUpdate} />
       </section>
 
@@ -135,6 +143,13 @@ export function ClinicSiteModal({
                 {ongoingTransfer.delivery_time_minutes} minutes on a{" "}
                 {ongoingTransfer.road_status} route.
               </p>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => onCompleteTransfer(ongoingTransfer)}
+              >
+                <CheckCircle2 size={15} /> Mark delivered
+              </button>
             </div>
           )}
         </div>

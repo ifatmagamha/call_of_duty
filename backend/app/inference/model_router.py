@@ -3,7 +3,7 @@ from typing import Literal
 from app.core.config import Settings
 
 
-CrusoeTask = Literal["image", "audio", "situation"]
+CrusoeTask = Literal["image", "audio", "text", "situation"]
 
 
 class ModelRouter:
@@ -11,6 +11,7 @@ class ModelRouter:
         self._models = {
             "image": settings.crusoe_image_model,
             "audio": settings.crusoe_audio_model,
+            "text": settings.crusoe_text_model,
             "situation": settings.crusoe_situation_model,
         }
 

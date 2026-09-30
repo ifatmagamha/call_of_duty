@@ -118,8 +118,6 @@ def test_agent_does_not_propose_resupply_for_normal_clinic():
 
     recommendation = get_agent_recommendation(client, "clinic-a")
 
-    assert recommendation.llm_used is False
-    assert recommendation.llm_agent is None
     assert recommendation.recommendation.startswith("No immediate")
     assert "warehouse_only" in recommendation.data_sources[-1]
 
@@ -143,8 +141,6 @@ def test_critical_recommendation_does_not_include_an_external_model_note():
     recommendation = get_agent_recommendation(client, "clinic-critical")
 
     assert recommendation.recommendation.startswith("Resupply")
-    assert recommendation.llm_provider == "deterministic"
-    assert recommendation.llm_agent is None
 
 
 def test_agent_explanation_reports_ongoing_transfer():
